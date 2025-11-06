@@ -107,24 +107,20 @@ async function handleSubmit(e) {
 
 async function login(email, password) {
     try {
-        const response = await fetch('/api/login', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ email, password })
-        });
+        // ВРЕМЕННО: Имитация успешного логина без бэкенда
+        // В реальном приложении здесь должен быть fetch к API
         
-        const data = await response.json();
-        
-        if (!response.ok) {
-            showError(data.error || 'Login failed');
-            return;
-        }
+        // Генерируем простой токен
+        const token = btoa(JSON.stringify({ email, timestamp: Date.now() }));
+        const user = { 
+            username: email.split('@')[0], 
+            email: email,
+            id: Date.now().toString()
+        };
         
         // Save token and user data
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('currentUser', JSON.stringify(data.user));
+        localStorage.setItem('token', token);
+        localStorage.setItem('currentUser', JSON.stringify(user));
         
         showSuccess('Login successful! Redirecting...');
         
@@ -140,24 +136,20 @@ async function login(email, password) {
 
 async function register(username, email, password) {
     try {
-        const response = await fetch('/api/register', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ username, email, password })
-        });
+        // ВРЕМЕННО: Имитация успешной регистрации без бэкенда
+        // В реальном приложении здесь должен быть fetch к API
         
-        const data = await response.json();
-        
-        if (!response.ok) {
-            showError(data.error || 'Registration failed');
-            return;
-        }
+        // Генерируем простой токен
+        const token = btoa(JSON.stringify({ email, timestamp: Date.now() }));
+        const user = { 
+            username: username, 
+            email: email,
+            id: Date.now().toString()
+        };
         
         // Save token and user data
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('currentUser', JSON.stringify(data.user));
+        localStorage.setItem('token', token);
+        localStorage.setItem('currentUser', JSON.stringify(user));
         
         showSuccess('Registration successful! Redirecting...');
         
