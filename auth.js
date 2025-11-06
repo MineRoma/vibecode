@@ -8,22 +8,21 @@ function initializeAuth() {
     const authForm = document.getElementById('authForm');
     const switchLink = document.getElementById('switchLink');
     
-    // Check if already logged in (only check, don't redirect immediately)
+    // Инициализируем демо-пользователей при первом запуске
+    initializeDemoUsers();
+    
+    // Check if already logged in
     const token = localStorage.getItem('token');
     const currentUser = localStorage.getItem('currentUser');
     
-    // Only redirect if we have both token and user data
     if (token && currentUser) {
-        // Verify token is not expired by attempting to parse user data
         try {
             JSON.parse(currentUser);
-            // Small delay to avoid redirect loops
             setTimeout(() => {
                 window.location.replace('index.html');
             }, 100);
             return;
         } catch (e) {
-            // Invalid user data, clear storage
             localStorage.removeItem('token');
             localStorage.removeItem('currentUser');
         }
@@ -31,6 +30,23 @@ function initializeAuth() {
     
     authForm.addEventListener('submit', handleSubmit);
     switchLink.addEventListener('click', toggleMode);
+}
+
+// Инициализация демо-пользователей
+function initializeDemoUsers() {
+    if (!localStorage.getItem('users')) {
+        const demoUsers = [
+            {
+                id: 1,
+                username: 'DemoUser',
+                email: 'demo@test.com',
+                password: 'demo123', // В реальном приложении здесь должен быть хэш!
+                avatar: 'D',
+                status: 'Online'
+            }
+        ];
+        localStorage.setItem('users', JSON.stringify(demoUsers));
+    }
 }
 
 function toggleMode(e) {
@@ -62,7 +78,6 @@ function toggleMode(e) {
         document.querySelector('.logo p').textContent = 'Welcome to Discord Clone!';
     }
     
-    // Clear any error messages
     removeMessage('error-message');
     removeMessage('success-message');
 }
@@ -107,20 +122,29 @@ async function handleSubmit(e) {
 
 async function login(email, password) {
     try {
-        // ВРЕМЕННО: Имитация успешного логина без бэкенда
-        // В реальном приложении здесь должен быть fetch к API
+        // Получаем пользователей из localStorage
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
+        const user = users.find(u => u.email === email);
         
-        // Генерируем простой токен
-        const token = btoa(JSON.stringify({ email, timestamp: Date.now() }));
-        const user = { 
-            username: email.split('@')[0], 
-            email: email,
-            id: Date.now().toString()
-        };
+        // Проверяем пароль (в реальном приложении здесь должно быть хэширование!)
+        if (!user || user.password !== password) {
+            showError('Invalid email or password');
+            return;
+        }
         
-        // Save token and user data
+        // Создаем токен
+        const token = btoa(JSON.stringify({ 
+            id: user.id, 
+            email: user.email, 
+            timestamp: Date.now() 
+        }));
+        
+        // Сохраняем пользователя без пароля
+        const userWithoutPassword = { ...user };
+        delete userWithoutPassword.password;
+        
         localStorage.setItem('token', token);
-        localStorage.setItem('currentUser', JSON.stringify(user));
+        localStorage.setItem('currentUser', JSON.stringify(userWithoutPassword));
         
         showSuccess('Login successful! Redirecting...');
         
@@ -130,26 +154,46 @@ async function login(email, password) {
         
     } catch (error) {
         console.error('Login error:', error);
-        showError('Network error. Please try again.');
+        showError('Login error. Please try again.');
     }
 }
 
 async function register(username, email, password) {
     try {
-        // ВРЕМЕННО: Имитация успешной регистрации без бэкенда
-        // В реальном приложении здесь должен быть fetch к API
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
         
-        // Генерируем простой токен
-        const token = btoa(JSON.stringify({ email, timestamp: Date.now() }));
-        const user = { 
-            username: username, 
+        // Проверяем, есть ли уже пользователь с таким email
+        if (users.find(u => u.email === email)) {
+            showError('Email already registered');
+            return;
+        }
+        
+        // Создаем нового пользователя
+        const newUser = {
+            id: Date.now(),
+            username: username,
             email: email,
-            id: Date.now().toString()
+            password: password, // В реальном приложении здесь должен быть хэш!
+            avatar: username.charAt(0).toUpperCase(),
+            status: 'Online'
         };
         
-        // Save token and user data
+        users.push(newUser);
+        localStorage.setItem('users', JSON.stringify(users));
+        
+        // Создаем токен
+        const token = btoa(JSON.stringify({ 
+            id: newUser.id, 
+            email: newUser.email, 
+            timestamp: Date.now() 
+        }));
+        
+        // Сохраняем пользователя без пароля
+        const userWithoutPassword = { ...newUser };
+        delete userWithoutPassword.password;
+        
         localStorage.setItem('token', token);
-        localStorage.setItem('currentUser', JSON.stringify(user));
+        localStorage.setItem('currentUser', JSON.stringify(userWithoutPassword));
         
         showSuccess('Registration successful! Redirecting...');
         
@@ -159,7 +203,7 @@ async function register(username, email, password) {
         
     } catch (error) {
         console.error('Registration error:', error);
-        showError('Network error. Please try again.');
+        showError('Registration failed. Please try again.');
     }
 }
 
