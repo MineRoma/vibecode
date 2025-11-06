@@ -280,71 +280,40 @@ function switchFriendsTab(tabName) {
     }
 }
 
+// Функции для работы с друзьями
 async function loadFriends() {
     try {
-        const response = await fetch('/api/friends', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const friends = await response.json();
+        // Используем localStorage вместо API
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
+        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+        
+        // Получаем список друзей из localStorage
+        const friendsData = JSON.parse(localStorage.getItem('friends') || '{}');
+        const userFriends = friendsData[currentUser.id] || [];
+        
+        // Фильтруем пользователей чтобы получить только друзей
+        const friends = users.filter(user => 
+            userFriends.includes(user.id) && user.id !== currentUser.id
+        );
+        
         displayFriends(friends);
         populateDMList(friends);
     } catch (error) {
         console.error('Error loading friends:', error);
+        // Показываем демо-друзей если есть ошибка
+        displayDemoFriends();
     }
 }
 
-function displayFriends(friends) {
-    const onlineList = document.getElementById('friendsOnline');
-    const allList = document.getElementById('friendsAll');
+function displayDemoFriends() {
+    const demoFriends = [
+        { id: 2, username: 'Alex', status: 'Online', avatar: 'A' },
+        { id: 3, username: 'Maria', status: 'Away', avatar: 'M' },
+        { id: 4, username: 'John', status: 'Offline', avatar: 'J' }
+    ];
     
-    onlineList.innerHTML = '';
-    allList.innerHTML = '';
-    
-    if (friends.length === 0) {
-        onlineList.innerHTML = '<div class="friends-empty">No friends yet</div>';
-        allList.innerHTML = '<div class="friends-empty">No friends yet</div>';
-        return;
-    }
-    
-    const onlineFriends = friends.filter(f => f.status === 'Online');
-    
-    if (onlineFriends.length === 0) {
-        onlineList.innerHTML = '<div class="friends-empty">No one is online</div>';
-    } else {
-        onlineFriends.forEach(friend => {
-            onlineList.appendChild(createFriendItem(friend));
-        });
-    }
-    
-    friends.forEach(friend => {
-        allList.appendChild(createFriendItem(friend));
-    });
-}
-
-function createFriendItem(friend) {
-    const div = document.createElement('div');
-    div.className = 'friend-item';
-    
-    div.innerHTML = `
-        <div class="friend-avatar">${friend.avatar || friend.username.charAt(0).toUpperCase()}</div>
-        <div class="friend-info">
-            <div class="friend-name">${friend.username}</div>
-            <div class="friend-status ${friend.status === 'Online' ? '' : 'offline'}">${friend.status}</div>
-        </div>
-        <div class="friend-actions">
-            <button class="friend-action-btn message" title="Message">💬</button>
-            <button class="friend-action-btn audio-call" title="Audio Call">📞</button>
-            <button class="friend-action-btn video-call" title="Video Call">📹</button>
-            <button class="friend-action-btn remove" title="Remove">🗑️</button>
-        </div>
-    `;
-
-    div.querySelector('.message').addEventListener('click', () => startDM(friend.id, friend.username));
-    div.querySelector('.audio-call').addEventListener('click', () => initiateCall(friend.id, 'audio'));
-    div.querySelector('.video-call').addEventListener('click', () => initiateCall(friend.id, 'video'));
-    div.querySelector('.remove').addEventListener('click', () => removeFriend(friend.id));
-    
-    return div;
+    displayFriends(demoFriends);
+    populateDMList(demoFriends);
 }
 
 async function searchUsers() {
@@ -354,10 +323,8 @@ async function searchUsers() {
     if (!query) return;
     
     try {
-        const response = await fetch('/api/users', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const users = await response.json();
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
+        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
         
         const results = users.filter(u => 
             u.username.toLowerCase().includes(query.toLowerCase()) && 
@@ -397,21 +364,24 @@ function displaySearchResults(users) {
 
 window.sendFriendRequest = async function(friendId) {
     try {
-        const response = await fetch('/api/friends/request', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ friendId })
-        });
+        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
         
-        if (response.ok) {
+        // Получаем текущие запросы
+        const friendRequests = JSON.parse(localStorage.getItem('friendRequests') || '{}');
+        
+        // Добавляем запрос
+        if (!friendRequests[friendId]) {
+            friendRequests[friendId] = [];
+        }
+        
+        if (!friendRequests[friendId].includes(currentUser.id)) {
+            friendRequests[friendId].push(currentUser.id);
+            localStorage.setItem('friendRequests', JSON.stringify(friendRequests));
             alert('Friend request sent!');
         } else {
-            const error = await response.json();
-            alert(error.error || 'Failed to send request');
+            alert('Friend request already sent!');
         }
+        
     } catch (error) {
         console.error('Error sending friend request:', error);
         alert('Failed to send friend request');
@@ -420,32 +390,34 @@ window.sendFriendRequest = async function(friendId) {
 
 async function loadPendingRequests() {
     try {
-        const response = await fetch('/api/friends/pending', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const requests = await response.json();
+        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
+        const friendRequests = JSON.parse(localStorage.getItem('friendRequests') || '{}');
+        
+        const pendingRequests = friendRequests[currentUser.id] || [];
+        const requestUsers = users.filter(user => pendingRequests.includes(user.id));
         
         const pendingList = document.getElementById('friendsPending');
         pendingList.innerHTML = '';
         
-        if (requests.length === 0) {
+        if (requestUsers.length === 0) {
             pendingList.innerHTML = '<div class="friends-empty">No pending requests</div>';
             return;
         }
         
-        requests.forEach(request => {
+        requestUsers.forEach(user => {
             const div = document.createElement('div');
             div.className = 'friend-item';
             
             div.innerHTML = `
-                <div class="friend-avatar">${request.avatar || request.username.charAt(0).toUpperCase()}</div>
+                <div class="friend-avatar">${user.avatar || user.username.charAt(0).toUpperCase()}</div>
                 <div class="friend-info">
-                    <div class="friend-name">${request.username}</div>
+                    <div class="friend-name">${user.username}</div>
                     <div class="friend-status">Incoming Friend Request</div>
                 </div>
                 <div class="friend-actions">
-                    <button class="friend-action-btn accept" onclick="acceptFriendRequest(${request.id})">✓</button>
-                    <button class="friend-action-btn reject" onclick="rejectFriendRequest(${request.id})">✕</button>
+                    <button class="friend-action-btn accept" onclick="acceptFriendRequest(${user.id})">✓</button>
+                    <button class="friend-action-btn reject" onclick="rejectFriendRequest(${user.id})">✕</button>
                 </div>
             `;
             
@@ -458,19 +430,33 @@ async function loadPendingRequests() {
 
 window.acceptFriendRequest = async function(friendId) {
     try {
-        const response = await fetch('/api/friends/accept', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ friendId })
-        });
+        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
         
-        if (response.ok) {
-            loadPendingRequests();
-            loadFriends();
+        // Обновляем список друзей
+        const friendsData = JSON.parse(localStorage.getItem('friends') || '{}');
+        
+        if (!friendsData[currentUser.id]) friendsData[currentUser.id] = [];
+        if (!friendsData[friendId]) friendsData[friendId] = [];
+        
+        if (!friendsData[currentUser.id].includes(friendId)) {
+            friendsData[currentUser.id].push(friendId);
         }
+        if (!friendsData[friendId].includes(currentUser.id)) {
+            friendsData[friendId].push(currentUser.id);
+        }
+        
+        localStorage.setItem('friends', JSON.stringify(friendsData));
+        
+        // Удаляем запрос
+        const friendRequests = JSON.parse(localStorage.getItem('friendRequests') || '{}');
+        if (friendRequests[currentUser.id]) {
+            friendRequests[currentUser.id] = friendRequests[currentUser.id].filter(id => id !== friendId);
+            localStorage.setItem('friendRequests', JSON.stringify(friendRequests));
+        }
+        
+        loadPendingRequests();
+        loadFriends();
+        
     } catch (error) {
         console.error('Error accepting friend request:', error);
     }
@@ -478,18 +464,17 @@ window.acceptFriendRequest = async function(friendId) {
 
 window.rejectFriendRequest = async function(friendId) {
     try {
-        const response = await fetch('/api/friends/reject', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ friendId })
-        });
+        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
         
-        if (response.ok) {
-            loadPendingRequests();
+        // Удаляем запрос
+        const friendRequests = JSON.parse(localStorage.getItem('friendRequests') || '{}');
+        if (friendRequests[currentUser.id]) {
+            friendRequests[currentUser.id] = friendRequests[currentUser.id].filter(id => id !== friendId);
+            localStorage.setItem('friendRequests', JSON.stringify(friendRequests));
         }
+        
+        loadPendingRequests();
+        
     } catch (error) {
         console.error('Error rejecting friend request:', error);
     }
@@ -499,14 +484,21 @@ window.removeFriend = async function(friendId) {
     if (!confirm('Are you sure you want to remove this friend?')) return;
     
     try {
-        const response = await fetch(`/api/friends/${friendId}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
         
-        if (response.ok) {
-            loadFriends();
+        // Удаляем из списка друзей
+        const friendsData = JSON.parse(localStorage.getItem('friends') || '{}');
+        
+        if (friendsData[currentUser.id]) {
+            friendsData[currentUser.id] = friendsData[currentUser.id].filter(id => id !== friendId);
         }
+        if (friendsData[friendId]) {
+            friendsData[friendId] = friendsData[friendId].filter(id => id !== currentUser.id);
+        }
+        
+        localStorage.setItem('friends', JSON.stringify(friendsData));
+        loadFriends();
+        
     } catch (error) {
         console.error('Error removing friend:', error);
     }
@@ -2054,4 +2046,5 @@ function makeInterfaceResizable(callInterface) {
     document.addEventListener('mouseup', () => {
         isResizing = false;
     });
+
 }
