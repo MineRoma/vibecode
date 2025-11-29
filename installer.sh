@@ -5,12 +5,49 @@ SITE_NAME="my_php_website"
 WEB_ROOT="/var/www/html/$SITE_NAME"
 PHP_VERSION="8.1" # Версия PHP по умолчанию для Ubuntu 22.04
 
-# --- 1. Обновление системы и установка пакетов ---
-echo "⚙️ Обновление списка пакетов и установка Nginx, PHP и MySQL..."
-sudo apt update
-sudo apt install -y nginx php${PHP_VERSION}-fpm php${PHP_VERSION}-mysql php${PHP_VERSION}-cli php${PHP_VERSION}-curl php${PHP_VERSION}-gd php${PHP_VERSION}-mbstring php${PHP_VERSION}-xml php${PHP_VERSION}-zip mysql-server
+# --- Функция: Ожидание освобождения блокировки APT ---
+function wait_for_lock() {
+    echo "⌛ Проверка и ожидание освобождения блокировки APT/DPKG..."
+    
+    # Файлы блокировки, которые нужно проверить
+    LOCK_FILES=(
+        "/var/lib/dpkg/lock-frontend"
+        "/var/lib/dpkg/lock"
+        "/var/cache/apt/archives/lock"
+    )
 
-# --- 2. Настройка Nginx ---
+    # Цикл проверки наличия блокировок
+    for lock in "${LOCK_FILES[@]}"; do
+        i=0
+        while fuser "$lock" >/dev/null 2>&1; do
+            i=$((i+1))
+            if [ $i -gt 30 ]; then
+                echo "⚠️ Блокировка удерживается слишком долго (более 5 минут). Проверьте процесс вручную!"
+                # Вывод ID процесса, который держит блокировку
+                PID=$(fuser -k -s $lock)
+                echo "   Процесс, удерживающий $lock: PID $PID"
+                echo "   Пожалуйста, дождитесь или используйте 'sudo kill $PID'"
+                exit 1
+            fi
+            echo "   ... Обнаружена блокировка $lock. Ожидаем 10 секунд..."
+            sleep 10
+        done
+    done
+    echo "✅ Блокировки отсутствуют. Продолжаем установку."
+}
+
+# --- Основное тело скрипта ---
+
+# 1. Сначала ожидаем, чтобы избежать конфликтов, как на вашем скриншоте
+wait_for_lock
+
+# 2. Обновление системы и установка пакетов
+echo "⚙️ Обновление списка пакетов и установка Nginx, PHP и MySQL..."
+# Используем команду 'DEBIAN_FRONTEND=noninteractive' для полностью автоматического режима
+DEBIAN_FRONTEND=noninteractive sudo apt update
+DEBIAN_FRONTEND=noninteractive sudo apt install -y nginx php${PHP_VERSION}-fpm php${PHP_VERSION}-mysql php${PHP_VERSION}-cli php${PHP_VERSION}-curl php${PHP_VERSION}-gd php${PHP_VERSION}-mbstring php${PHP_VERSION}-xml php${PHP_VERSION}-zip mysql-server
+
+# --- Дальнейшая настройка (как в предыдущем скрипте) ---
 
 # Создание каталога для сайта
 echo "📁 Создание корневого каталога сайта: $WEB_ROOT"
@@ -58,7 +95,7 @@ sudo nginx -t
 sudo systemctl restart nginx
 sudo systemctl enable nginx
 
-# --- 3. Настройка MySQL (БЕЗ установки пароля!) ---
+# --- Настройка MySQL ---
 echo "⚠️ **Внимание:** MySQL установлен, но не защищен! Запустите 'sudo mysql_secure_installation' для установки пароля и защиты."
 sudo systemctl start mysql
 sudo systemctl enable mysql
