@@ -2,7 +2,7 @@
 
 # --- НАСТРАИВАЕМЫЕ ПЕРЕМЕННЫЕ ---
 # ОБЯЗАТЕЛЬНО ЗАМЕНИТЕ ЭТО СВОИМИ ДАННЫМИ:
-DOMAIN_NAME="ваш_домен.ru" # Например: example.com
+DOMAIN_NAME="www.mineroma.work.gd" # Например: example.com
 SITE_NAME="my_php_website" # Имя сайта из предыдущего инсталлера
 WP_DB_USER="webuser"       # Имя пользователя БД WordPress (если вы его создавали)
 WP_DB_NAME="website_db"    # Имя базы данных WordPress
