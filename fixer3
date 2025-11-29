@@ -1,0 +1,79 @@
+#!/bin/bash
+
+# --- НАСТРАИВАЕМЫЕ ПЕРЕМЕННЫЕ (ОБЯЗАТЕЛЬНО ИЗМЕНИТЬ) ---
+DOMAIN_NAME="mineroma.work.gd"
+SITE_NAME="my_php_website"
+IP_ADDRESS="62.60.187.58" # Ваш IP-адрес
+# -----------------------------------------------------
+
+WEB_ROOT="/var/www/html/$SITE_NAME"
+PHP_VERSION="8.1"
+NGINX_CONF="/etc/nginx/sites-available/$SITE_NAME"
+
+# --- Функция: Ожидание освобождения блокировки APT ---
+function wait_for_lock() {
+    echo "⌛ Проверка и ожидание освобождения блокировки APT/DPKG..."
+    LOCK_FILES=("/var/lib/dpkg/lock-frontend" "/var/lib/dpkg/lock" "/var/cache/apt/archives/lock")
+    for lock in "${LOCK_FILES[@]}"; do
+        while fuser "$lock" >/dev/null 2>&1; do
+            sleep 5
+        done
+    done
+    echo "✅ Блокировки отсутствуют. Продолжаем."
+}
+
+# --- 1. Установка Nginx и UFW (на всякий случай) ---
+echo "---"
+echo "🛠️ Шаг 1: Установка необходимых пакетов..."
+wait_for_lock
+sudo apt install -y nginx ufw
+
+# --- 2. Исправление и запуск Nginx ---
+echo "---"
+echo "🛠️ Шаг 2: Создание чистой и исправленной конфигурации Nginx..."
+
+# 2.1. Удаляем сломанную символическую ссылку
+sudo rm -f /etc/nginx/sites-enabled/$SITE_NAME
+
+# 2.2. Создаем чистый конфигурационный файл
+sudo bash -c "cat <<EOF > $NGINX_CONF
+server {
+    listen 80;
+    server_name $DOMAIN_NAME www.$DOMAIN_NAME $IP_ADDRESS; 
+
+    root $WEB_ROOT;
+    index index.php index.html index.htm;
+
+    # Исправленный try_files
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+
+    # Pass PHP scripts to FPM
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php${PHP_VERSION}-fpm.sock;
+    }
+}
+EOF"
+
+# 2.3. Активируем конфиг
+sudo ln -s $NGINX_CONF /etc/nginx/sites-enabled/
+
+# 2.4. Проверка и запуск Nginx
+sudo nginx -t
+if [ $? -eq 0 ]; then
+    sudo systemctl restart nginx
+    echo "✅ Nginx запущен с исправленной конфигурацией."
+    
+    # 2.5. Проверяем, что Nginx действительно слушает порты
+    echo "🔄 Проверка портов..."
+    sudo ss -tuln | grep -E '80|443'
+else
+    echo "❌ КРИТИЧЕСКАЯ ОШИБКА NGINX: Конфигурация сломана. Проверьте $NGINX_CONF вручную!"
+fi
+
+echo "---"
+echo "🎉 ФИКС ЗАВЕРШЕН."
+echo "1. Проверьте IP-адрес: http://$IP_ADDRESS/"
+echo "2. Если по-прежнему ERR_CONNECTION_REFUSED, ищите 'Firewall Rules' в панели провайдера."
